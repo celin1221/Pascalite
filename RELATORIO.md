@@ -5,7 +5,6 @@
 **Disciplina:** Compiladores  
 **Professor:** Rodrigo Freitas Silva  
 **Nome da Linguagem:** PascaLite  
-**Código Fonte:** Totalmente em Português Brasileiro (PT-BR)  
 
 ---
 
@@ -13,7 +12,6 @@
 
 A linguagem de programação desenvolvida para este trabalho é denominada **PascaLite** (dialeto simplificado e modernizado da linguagem Pascal especificado para a disciplina de Compiladores da UFES). O dialeto preserva a clareza e estrutura de blocos clássica de Pascal, com suporte a tipagem estática, sub-rotinas (procedimentos e funções), estruturas condicionais e de repetição, além de pontuação e operadores convencionais.
 
-Todo o código-fonte, classes, métodos, atributos, enums e documentação foram refatorados para o **Português Brasileiro (PT-BR)**.
 
 ---
 
