@@ -1,8 +1,6 @@
 package br.ufes.compiladores.pascalite.lexico;
 
-/**
- * Representa um token léxico identificado pelo compilador PascaLite.
- */
+
 public class Token {
     private final TipoToken tipo;
     private final String lexema;

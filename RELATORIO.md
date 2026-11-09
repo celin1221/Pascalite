@@ -26,7 +26,6 @@ graph TD
         Editor["PainelEditorCodigo (Editor + Realce Sintático)"]
         Pintor["PintorSublinhadoOndulado (Sublinhado Vermelho)"]
         NumLinhas["PainelNumeracaoLinha (Números de Linha)"]
-        PainelAFD["PainelAFD (Visualizador do Grafo e Tabela AFD)"]
         ModTokens["ModeloTabelaTokens"]
         ModSimbolos["ModeloTabelaSimbolos"]
         ModErros["ModeloTabelaErros"]
@@ -42,20 +41,10 @@ graph TD
         ModoPanico["Recuperação de Erros (Modo Pânico)"]
     end
 
-    subgraph AFD ["Modelo Formal do Autômato (lexico.afd)"]
-        ModeloAFD["ModeloAFD"]
-        EstadoAFD["EstadoAFD"]
-        TransicaoAFD["TransicaoAFD"]
-    end
-
     IDE --> Editor
     Editor --> NumLinhas
     Editor --> Pintor
     Editor --> Analisador
-    IDE --> PainelAFD
-    PainelAFD --> ModeloAFD
-    ModeloAFD --> EstadoAFD
-    ModeloAFD --> TransicaoAFD
 
     Analisador --> TabSimbolos
     Analisador --> Token
@@ -71,23 +60,20 @@ graph TD
 
 ### Descrição dos Módulos em PT-BR:
 1. **Pacote `br.ufes.compiladores.pascalite.lexico`**:
-   - `AnalisadorLexico`: Motor de análise léxica que consome o código fonte como fluxo de caracteres, implementando o autômato determinístico, supressão de comentários e espaços, identificação de tokens e detecção/recuperação de erros léxicos.
+   - `AnalisadorLexico`: Motor de análise léxica que consome o código fonte como fluxo de caracteres, realizando supressão de comentários e espaços, identificação de tokens e detecção/recuperação de erros léxicos.
    - `TipoToken`: Enumeração tipada em português com todos os tokens formais do dialeto (`PR_PROGRAM`, `PR_VAR`, `IDENTIFICADOR`, `NUMERO_INTEIRO`, etc.).
    - `CategoriaToken`: Classificação semântica dos tokens (`PALAVRA_RESERVADA`, `IDENTIFICADOR`, `LITERAL_NUMERICO`, etc.).
    - `Token`: Representação do token produzido, contendo lexema, linha, coluna, índices absolutos no texto e atributos semânticos (ex.: valor `Long`, `Double`, `String`).
    - `TabelaSimbolos`: Gerenciador da tabela de símbolos, pré-populada com palavras reservadas, operadores e pontuação, acumulando dinamicamente identificadores definidos pelo usuário no programa objeto.
    - `EntradaSimbolo`: Metadados de cada símbolo (lexema, chave canônica, categoria, origem pré-definida ou programa objeto, quantidade de ocorrências e linhas em que aparece).
    - `ErroLexico`: Estrutura de registro de erros léxicos, contendo linha, coluna, lexema ofensivo, mensagem explicativa e descrição da estratégia de recuperação empregada.
-2. **Pacote `br.ufes.compiladores.pascalite.lexico.afd`**:
-   - `ModeloAFD`, `EstadoAFD`, `TransicaoAFD`: Modela formalmente a 5-tupla $M = (Q, \Sigma, \delta, q_0, F)$ do Autômato Finito Determinístico, fornecendo a base para a documentação e para a renderização gráfica interativa na IDE.
-3. **Pacote `br.ufes.compiladores.pascalite.ide`**:
+2. **Pacote `br.ufes.compiladores.pascalite.ide`**:
    - `IDEPascalite`: Janela central Swing com menus, botões rápidos, split vertical, console integrado e abas de inspeção.
    - `PainelEditorCodigo`: Editor com documento estilizado, syntax highlighting colorido, listener em tempo real com *debounce* e rastreamento de cursor.
    - `PintorSublinhadoOndulado`: Pintor gráfico que desenha o sublinhado ondulado vermelho (*red squiggly line*) sob cada erro léxico detectado.
    - `PainelNumeracaoLinha`: Barra lateral de numeração de linhas sincronizada com scroll e edição.
-   - `PainelAFD`: Visualizador gráfico do autômato via Java 2D e tabela completa de transições.
    - `modelos`: Modelos de tabela Swing (`ModeloTabelaTokens`, `ModeloTabelaSimbolos`, `ModeloTabelaErros`).
-4. **Classe `Principal`**:
+3. **Classe `Principal`**:
    - Ponto de entrada único: executa a IDE gráfica sem parâmetros ou o analisador em modo console (CLI) quando recebe um arquivo fonte como argumento.
 
 ---
@@ -202,12 +188,9 @@ A IDE foi desenvolvida em **Java Swing** nativo, sem dependências externas comp
    - Lista sequencial de todos os tokens gerados com numeração, linha, coluna, categoria, tipo, lexema e valor convertido (`ModeloTabelaTokens`).
 4. **Tabela de Símbolos Completa:**
    - Apresenta símbolos pré-definidos (palavras reservadas, operadores, pontuações) e símbolos dinâmicos do programa (identificadores), contabilizando o total de ocorrências e todas as linhas onde foram referenciados (`ModeloTabelaSimbolos`).
-5. **Aba do Autômato Finito (AFD):**
-   - Renderizador gráfico Java 2D do diagrama de estados e transições (`PainelAFD`).
-   - Tabela formal de transições $\delta(q, a)$ acessível na mesma aba.
-6. **Console de Compilação:**
+5. **Console de Compilação:**
    - Log completo da compilação com estatísticas de tempo, caracteres e contagem de tokens/erros.
-7. **Menu de Exemplos Prontos:**
+6. **Menu de Exemplos Prontos:**
    - Permite carregar com um clique programas de exemplo válidos, com erros, fatorial e bônus.
 
 ---

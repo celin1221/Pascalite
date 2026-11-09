@@ -3,10 +3,10 @@ package br.ufes.compiladores.pascalite.ide;
 import br.ufes.compiladores.pascalite.lexico.AnalisadorLexico;
 import br.ufes.compiladores.pascalite.lexico.ErroLexico;
 import br.ufes.compiladores.pascalite.lexico.Token;
+import br.ufes.compiladores.pascalite.sintatico.AnalisadorSintatico;
+import br.ufes.compiladores.pascalite.sintatico.ErroSintatico;
 
 import javax.swing.*;
-import javax.swing.event.CaretEvent;
-import javax.swing.event.CaretListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.*;
@@ -14,17 +14,10 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Painel de edição de código fonte com suporte a:
- * - Realce de sintaxe colorido (Syntax Highlighting)
- * - Detecção de erros léxicos em tempo real (On-the-fly)
- * - Sublinhado vermelho ondulado nos erros (PintorSublinhadoOndulado)
- * - Rastreamento de posição de cursor (Linha e Coluna)
- */
 public class PainelEditorCodigo extends JTextPane {
 
     public interface RetornoAnalise {
-        void aoFinalizarAnalise(List<Token> tokens, List<ErroLexico> erros);
+        void aoFinalizarAnalise(List<Token> tokens, List<ErroLexico> errosLexicos, List<ErroSintatico> errosSintaticos);
     }
 
     public interface RetornoPosicaoCursor {
@@ -32,13 +25,13 @@ public class PainelEditorCodigo extends JTextPane {
     }
 
     private final Timer temporizadorDebounce;
-    private final PintorSublinhadoOndulado pintorOndulado;
+    private final PintorSublinhadoOndulado pintorErro;
+    private final PintorSublinhadoOndulado pintorAviso;
     private final List<Object> marcadoresDestaque = new ArrayList<>();
     private RetornoAnalise retornoAnalise;
     private RetornoPosicaoCursor retornoCursor;
     private boolean atualizandoEstilos = false;
 
-    // Estilos visuais
     private final Style estiloNormal;
     private final Style estiloPalavraChave;
     private final Style estiloNumero;
@@ -53,31 +46,30 @@ public class PainelEditorCodigo extends JTextPane {
         setCaretColor(new Color(255, 255, 255));
         setMargin(new Insets(5, 8, 5, 8));
 
-        this.pintorOndulado = new PintorSublinhadoOndulado(new Color(244, 75, 75));
+        this.pintorErro = new PintorSublinhadoOndulado(new Color(244, 75, 75));
+        this.pintorAviso = new PintorSublinhadoOndulado(new Color(240, 180, 50));
 
-        // Inicializa estilos
         StyledDocument doc = getStyledDocument();
         estiloNormal = doc.addStyle("Normal", null);
         StyleConstants.setForeground(estiloNormal, new Color(220, 220, 220));
 
         estiloPalavraChave = doc.addStyle("PalavraChave", null);
-        StyleConstants.setForeground(estiloPalavraChave, new Color(86, 156, 214)); // Azul
+        StyleConstants.setForeground(estiloPalavraChave, new Color(86, 156, 214));
         StyleConstants.setBold(estiloPalavraChave, true);
 
         estiloNumero = doc.addStyle("Numero", null);
-        StyleConstants.setForeground(estiloNumero, new Color(181, 206, 168)); // Verde suave
+        StyleConstants.setForeground(estiloNumero, new Color(181, 206, 168));
 
         estiloTexto = doc.addStyle("Texto", null);
-        StyleConstants.setForeground(estiloTexto, new Color(206, 145, 120)); // Laranja/marrom
+        StyleConstants.setForeground(estiloTexto, new Color(206, 145, 120));
 
         estiloComentario = doc.addStyle("Comentario", null);
-        StyleConstants.setForeground(estiloComentario, new Color(106, 153, 85)); // Verde comentário
+        StyleConstants.setForeground(estiloComentario, new Color(106, 153, 85));
         StyleConstants.setItalic(estiloComentario, true);
 
         estiloOperador = doc.addStyle("Operador", null);
-        StyleConstants.setForeground(estiloOperador, new Color(218, 218, 160)); // Amarelo suave
+        StyleConstants.setForeground(estiloOperador, new Color(218, 218, 160));
 
-        // Temporizador de debounce para análise em tempo real (250 ms após digitação)
         temporizadorDebounce = new Timer(250, e -> executarAnalise());
         temporizadorDebounce.setRepeats(false);
 
@@ -97,12 +89,7 @@ public class PainelEditorCodigo extends JTextPane {
             }
         });
 
-        addCaretListener(new CaretListener() {
-            @Override
-            public void caretUpdate(CaretEvent e) {
-                atualizarPosicaoCursor();
-            }
-        });
+        addCaretListener(e -> atualizarPosicaoCursor());
     }
 
     public void definirRetornoAnalise(RetornoAnalise retorno) {
@@ -113,38 +100,46 @@ public class PainelEditorCodigo extends JTextPane {
         this.retornoCursor = retorno;
     }
 
-    /**
-     * Executa a análise léxica completa do texto atual, atualizando realce de sintaxe e sublinhado de erros.
-     */
     public void executarAnalise() {
         String codigo = getText();
-        AnalisadorLexico analisador = new AnalisadorLexico(codigo);
-        List<Token> tokens = analisador.analisar();
-        List<ErroLexico> erros = analisador.getErros();
+        AnalisadorLexico lexico = new AnalisadorLexico(codigo);
+        List<Token> tokens = lexico.analisar();
+        List<ErroLexico> errosLexicos = lexico.getErros();
 
-        // 1. Limpa sublinhados anteriores
+        AnalisadorSintatico sintatico = new AnalisadorSintatico(tokens);
+        List<ErroSintatico> errosSintaticos = sintatico.analisar();
+
         limparDestaquesErros();
 
-        // 2. Aplica sublinhado ondulado vermelho para cada erro léxico
         Highlighter highlighter = getHighlighter();
-        for (ErroLexico err : erros) {
-            int inicio = Math.min(err.getIndiceInicio(), codigo.length());
-            int fim = Math.min(err.getIndiceFim(), codigo.length());
-            if (inicio < fim) {
-                try {
-                    Object marcador = highlighter.addHighlight(inicio, fim, pintorOndulado);
-                    marcadoresDestaque.add(marcador);
-                } catch (BadLocationException ignored) {
-                }
-            }
+        for (ErroLexico err : errosLexicos) {
+            adicionarSublinhado(highlighter, codigo.length(), err.getIndiceInicio(), err.getIndiceFim(), pintorErro);
         }
 
-        // 3. Aplica cores de sintaxe
+        for (ErroSintatico err : errosSintaticos) {
+            PintorSublinhadoOndulado pintor = err.ehAviso() ? pintorAviso : pintorErro;
+            adicionarSublinhado(highlighter, codigo.length(), err.getIndiceInicio(), err.getIndiceFim(), pintor);
+        }
+
         aplicarDestaqueSintaxe(codigo, tokens);
 
-        // 4. Notifica listener
         if (retornoAnalise != null) {
-            retornoAnalise.aoFinalizarAnalise(tokens, erros);
+            retornoAnalise.aoFinalizarAnalise(tokens, errosLexicos, errosSintaticos);
+        }
+    }
+
+    private void adicionarSublinhado(Highlighter highlighter, int tamCodigo, int inicioBruto, int fimBruto, PintorSublinhadoOndulado pintor) {
+        int inicio = Math.max(0, Math.min(inicioBruto, tamCodigo));
+        int fim = Math.max(inicio, Math.min(fimBruto, tamCodigo));
+        if (inicio == fim && inicio > 0) {
+            inicio = inicio - 1;
+        }
+        if (inicio < fim) {
+            try {
+                Object marcador = highlighter.addHighlight(inicio, fim, pintor);
+                marcadoresDestaque.add(marcador);
+            } catch (BadLocationException ignored) {
+            }
         }
     }
 
@@ -160,10 +155,8 @@ public class PainelEditorCodigo extends JTextPane {
         atualizandoEstilos = true;
         StyledDocument doc = getStyledDocument();
 
-        // Reseta tudo para texto normal
         doc.setCharacterAttributes(0, codigo.length(), estiloNormal, true);
 
-        // Aplica estilos baseados nos tokens reconhecidos
         for (Token t : tokens) {
             int inicio = t.getIndiceInicio();
             int tamanho = t.getTamanho();
@@ -179,9 +172,7 @@ public class PainelEditorCodigo extends JTextPane {
             }
         }
 
-        // Realça comentários (descartados do fluxo principal de tokens)
         destacarComentarios(codigo, doc);
-
         atualizandoEstilos = false;
     }
 
@@ -191,16 +182,13 @@ public class PainelEditorCodigo extends JTextPane {
         while (i < tam) {
             char c = codigo.charAt(i);
 
-            // Comentário //
             if (c == '/' && i + 1 < tam && codigo.charAt(i + 1) == '/') {
                 int inicio = i;
                 while (i < tam && codigo.charAt(i) != '\n' && codigo.charAt(i) != '\r') {
                     i++;
                 }
                 doc.setCharacterAttributes(inicio, i - inicio, estiloComentario, false);
-            }
-            // Comentário { ... }
-            else if (c == '{') {
+            } else if (c == '{') {
                 int inicio = i;
                 i++;
                 while (i < tam && codigo.charAt(i) != '}') {
@@ -210,9 +198,7 @@ public class PainelEditorCodigo extends JTextPane {
                     i++;
                 }
                 doc.setCharacterAttributes(inicio, i - inicio, estiloComentario, false);
-            }
-            // Comentário (* ... *)
-            else if (c == '(' && i + 1 < tam && codigo.charAt(i + 1) == '*') {
+            } else if (c == '(' && i + 1 < tam && codigo.charAt(i + 1) == '*') {
                 int inicio = i;
                 i += 2;
                 while (i < tam) {
@@ -223,9 +209,7 @@ public class PainelEditorCodigo extends JTextPane {
                     i++;
                 }
                 doc.setCharacterAttributes(inicio, i - inicio, estiloComentario, false);
-            }
-            // Literais de texto (pula para não confundir // dentro de string)
-            else if (c == '\'') {
+            } else if (c == '\'') {
                 i++;
                 while (i < tam && codigo.charAt(i) != '\'' && codigo.charAt(i) != '\n') {
                     i++;
@@ -248,9 +232,6 @@ public class PainelEditorCodigo extends JTextPane {
         retornoCursor.aoMoverCursor(linha + 1, coluna + 1);
     }
 
-    /**
-     * Posiciona o cursor e seleciona o trecho especificado por linha, coluna e comprimento.
-     */
     public void irParaErro(int linha, int coluna, int tamanho) {
         try {
             Element raiz = getDocument().getDefaultRootElement();

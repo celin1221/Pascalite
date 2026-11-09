@@ -1,8 +1,6 @@
 package br.ufes.compiladores.pascalite.lexico;
 
-/**
- * Representa um erro léxico identificado durante a análise do código fonte.
- */
+
 public class ErroLexico {
     private final int linha;
     private final int coluna;

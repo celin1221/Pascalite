@@ -4,9 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Representa uma entrada na Tabela de Símbolos do compilador PascaLite.
- */
 public class EntradaSimbolo {
     private final String chaveCanonica;
     private final String lexema;

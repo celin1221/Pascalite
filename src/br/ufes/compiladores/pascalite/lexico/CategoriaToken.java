@@ -1,8 +1,6 @@
 package br.ufes.compiladores.pascalite.lexico;
 
-/**
- * Categorias semânticas dos tokens do dialeto PascaLite.
- */
+
 public enum CategoriaToken {
     PALAVRA_RESERVADA("Palavra Reservada"),
     IDENTIFICADOR("Identificador"),

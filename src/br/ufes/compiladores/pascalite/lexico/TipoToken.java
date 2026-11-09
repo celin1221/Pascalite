@@ -1,8 +1,6 @@
 package br.ufes.compiladores.pascalite.lexico;
 
-/**
- * Tipos de tokens reconhecidos pelo analisador léxico do dialeto PascaLite.
- */
+
 public enum TipoToken {
     // Palavras reservadas da gramática formal (Anexo I)
     PR_PROGRAM("PROGRAM", CategoriaToken.PALAVRA_RESERVADA),

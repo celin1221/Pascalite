@@ -7,9 +7,7 @@ import javax.swing.text.Element;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
 
-/**
- * Componente de barra lateral que exibe os números de linha sincronizados com o editor.
- */
+
 public class PainelNumeracaoLinha extends JPanel {
     private final JTextComponent editor;
     private int ultimosDigitos = 0;

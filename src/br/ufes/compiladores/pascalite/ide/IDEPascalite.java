@@ -2,11 +2,14 @@ package br.ufes.compiladores.pascalite.ide;
 
 import br.ufes.compiladores.pascalite.ide.modelos.ModeloTabelaErros;
 import br.ufes.compiladores.pascalite.ide.modelos.ModeloTabelaSimbolos;
+import br.ufes.compiladores.pascalite.ide.modelos.ModeloTabelaSintatico;
 import br.ufes.compiladores.pascalite.ide.modelos.ModeloTabelaTokens;
 import br.ufes.compiladores.pascalite.lexico.AnalisadorLexico;
 import br.ufes.compiladores.pascalite.lexico.ErroLexico;
 import br.ufes.compiladores.pascalite.lexico.TabelaSimbolos;
 import br.ufes.compiladores.pascalite.lexico.Token;
+import br.ufes.compiladores.pascalite.sintatico.AnalisadorSintatico;
+import br.ufes.compiladores.pascalite.sintatico.ErroSintatico;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -20,19 +23,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
 
-/**
- * IDE completa para desenvolvimento e compilação do dialeto PascaLite.
- * Atende a todos os requisitos do Trabalho de Compiladores (UFES - Prof. Rodrigo Freitas Silva).
- */
 public class IDEPascalite extends JFrame {
     private final PainelEditorCodigo painelEditor;
     private final ModeloTabelaTokens modeloTabelaTokens;
     private final ModeloTabelaSimbolos modeloTabelaSimbolos;
     private final ModeloTabelaErros modeloTabelaErros;
+    private final ModeloTabelaSintatico modeloTabelaSintatico;
 
     private final JTable tabelaTokens;
-    private final JTable tabelaSímbolos;
+    private final JTable tabelaSimbolos;
     private final JTable tabelaErros;
+    private final JTable tabelaSintatico;
     private final JTabbedPane abasInferiores;
     private final JTextArea areaConsole;
 
@@ -43,21 +44,21 @@ public class IDEPascalite extends JFrame {
     private File arquivoAtual = null;
 
     public IDEPascalite() {
-        super("PascaLite IDE - Ambiente de Desenvolvimento & Compilador (UFES)");
+        super("PascaLite IDE - Compilador (UFES)");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1100, 800);
         setLocationRelativeTo(null);
 
-        // Modelos e Tabelas
         modeloTabelaTokens = new ModeloTabelaTokens();
         modeloTabelaSimbolos = new ModeloTabelaSimbolos();
         modeloTabelaErros = new ModeloTabelaErros();
+        modeloTabelaSintatico = new ModeloTabelaSintatico();
 
         tabelaTokens = criarTabelaEstilizada(modeloTabelaTokens);
-        tabelaSímbolos = criarTabelaEstilizada(modeloTabelaSimbolos);
+        tabelaSimbolos = criarTabelaEstilizada(modeloTabelaSimbolos);
         tabelaErros = criarTabelaEstilizada(modeloTabelaErros);
+        tabelaSintatico = criarTabelaEstilizada(modeloTabelaSintatico);
 
-        // Clique duplo na tabela de erros leva até o erro no código fonte
         tabelaErros.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -73,7 +74,21 @@ public class IDEPascalite extends JFrame {
             }
         });
 
-        // Editor com suporte a linhas e análise em tempo real
+        tabelaSintatico.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int linhaSel = tabelaSintatico.getSelectedRow();
+                    if (linhaSel >= 0) {
+                        ErroSintatico err = modeloTabelaSintatico.obterErroNaLinha(linhaSel);
+                        if (err != null) {
+                            painelEditor.irParaErro(err.getLinha(), err.getColuna(), err.getTamanho());
+                        }
+                    }
+                }
+            }
+        });
+
         painelEditor = new PainelEditorCodigo();
         PainelNumeracaoLinha painelNumeros = new PainelNumeracaoLinha(painelEditor);
 
@@ -81,27 +96,24 @@ public class IDEPascalite extends JFrame {
         scrollEditor.setRowHeaderView(painelNumeros);
         scrollEditor.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(50, 50, 50)));
 
-        // Aba inferior de resultados
         abasInferiores = new JTabbedPane();
         abasInferiores.setFont(new Font("Segoe UI", Font.BOLD, 12));
         abasInferiores.addTab("Erros Léxicos (0)", new JScrollPane(tabelaErros));
+        abasInferiores.addTab("Erros Sintáticos (0)", new JScrollPane(tabelaSintatico));
         abasInferiores.addTab("Fluxo de Tokens (0)", new JScrollPane(tabelaTokens));
-        abasInferiores.addTab("Tabela de Símbolos", new JScrollPane(tabelaSímbolos));
-        abasInferiores.addTab("Autômato Finito (AFD)", new PainelAFD());
+        abasInferiores.addTab("Tabela de Símbolos", new JScrollPane(tabelaSimbolos));
 
         areaConsole = new JTextArea();
         areaConsole.setEditable(false);
         areaConsole.setBackground(new Color(24, 24, 24));
         areaConsole.setForeground(new Color(210, 210, 210));
         areaConsole.setFont(new Font("Consolas", Font.PLAIN, 12));
-        abasInferiores.addTab("Console / Registro", new JScrollPane(areaConsole));
+        abasInferiores.addTab("Console", new JScrollPane(areaConsole));
 
-        // Divisão Vertical (Editor / Painéis)
         JSplitPane splitPrincipal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollEditor, abasInferiores);
         splitPrincipal.setResizeWeight(0.55);
         splitPrincipal.setDividerSize(6);
 
-        // Barra de Status
         JPanel barraStatus = new JPanel(new BorderLayout());
         barraStatus.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(50, 50, 50)),
@@ -109,30 +121,28 @@ public class IDEPascalite extends JFrame {
         ));
         barraStatus.setBackground(new Color(30, 30, 30));
 
-        rotuloStatus = new JLabel("Pronto | Dialeto PascaLite (Pascal-UFES)");
+        rotuloStatus = new JLabel("Pronto | Dialeto PascaLite");
         rotuloStatus.setForeground(new Color(180, 180, 180));
         rotuloStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
-        rotuloPosicaoCursor = new JLabel("Linha: 1, Coluna: 1   |   UTF-8   |   Insensível a Maiúsculas");
+        rotuloPosicaoCursor = new JLabel("Linha: 1, Coluna: 1   |   UTF-8");
         rotuloPosicaoCursor.setForeground(new Color(180, 180, 180));
         rotuloPosicaoCursor.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
         barraStatus.add(rotuloStatus, BorderLayout.WEST);
         barraStatus.add(rotuloPosicaoCursor, BorderLayout.EAST);
 
-        // Callbacks do editor
         painelEditor.definirRetornoCursor((linha, coluna) ->
-                rotuloPosicaoCursor.setText(String.format("Linha: %d, Coluna: %d   |   UTF-8   |   Insensível a Maiúsculas", linha, coluna)));
+                rotuloPosicaoCursor.setText(String.format("Linha: %d, Coluna: %d   |   UTF-8", linha, coluna)));
 
         painelEditor.definirRetornoAnalise(this::aoFinalizarAnalise);
 
-        // Menu e Barra de Ferramentas
         seletorExemplos = new JComboBox<>(new String[]{
-                "-- Selecionar Exemplo Pronto --",
+                "-- Selecionar Exemplo --",
                 "1. Programa Válido Completo (Anexo I)",
-                "2. Programa com Erros Léxicos (Recuperação)",
-                "3. Algoritmo Fatorial (com Função e For)",
-                "4. Extensão com Registros e Enumerações (Ponto Extra)"
+                "2. Programa com Erros Léxicos e Sintáticos",
+                "3. Algoritmo Fatorial (Função e For)",
+                "4. Registros e Enumerações"
         });
         seletorExemplos.addActionListener(this::tratarSelecaoExemplo);
 
@@ -141,7 +151,6 @@ public class IDEPascalite extends JFrame {
         add(splitPrincipal, BorderLayout.CENTER);
         add(barraStatus, BorderLayout.SOUTH);
 
-        // Inicializa com o exemplo padrão válido
         carregarExemploValido();
     }
 
@@ -163,7 +172,6 @@ public class IDEPascalite extends JFrame {
     private JMenuBar criarBarraMenu() {
         JMenuBar mb = new JMenuBar();
 
-        // Menu Arquivo
         JMenu menuArquivo = new JMenu("Arquivo");
         JMenuItem itemNovo = new JMenuItem("Novo");
         itemNovo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK));
@@ -190,9 +198,8 @@ public class IDEPascalite extends JFrame {
         menuArquivo.addSeparator();
         menuArquivo.add(itemSair);
 
-        // Menu Compilar
         JMenu menuCompilar = new JMenu("Compilar");
-        JMenuItem itemExecutar = new JMenuItem("Executar Análise Léxica (F5)");
+        JMenuItem itemExecutar = new JMenuItem("Executar Análise (F5)");
         itemExecutar.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
         itemExecutar.addActionListener(e -> executarAnaliseLexica());
 
@@ -202,15 +209,14 @@ public class IDEPascalite extends JFrame {
         menuCompilar.add(itemExecutar);
         menuCompilar.add(itemLimpar);
 
-        // Menu Exemplos
         JMenu menuExemplos = new JMenu("Exemplos");
         JMenuItem ex1 = new JMenuItem("1. Programa Válido (Anexo I)");
         ex1.addActionListener(e -> carregarExemploValido());
-        JMenuItem ex2 = new JMenuItem("2. Programa com Erros Léxicos (Recuperação)");
+        JMenuItem ex2 = new JMenuItem("2. Programa com Erros");
         ex2.addActionListener(e -> carregarExemploErros());
-        JMenuItem ex3 = new JMenuItem("3. Fatorial (com Função e For)");
+        JMenuItem ex3 = new JMenuItem("3. Fatorial (Função e For)");
         ex3.addActionListener(e -> carregarExemploFatorial());
-        JMenuItem ex4 = new JMenuItem("4. Extensão com Registros e Enumerações");
+        JMenuItem ex4 = new JMenuItem("4. Registros e Enumerações");
         ex4.addActionListener(e -> carregarExemploBonus());
 
         menuExemplos.add(ex1);
@@ -218,7 +224,6 @@ public class IDEPascalite extends JFrame {
         menuExemplos.add(ex3);
         menuExemplos.add(ex4);
 
-        // Menu Ajuda
         JMenu menuAjuda = new JMenu("Ajuda");
         JMenuItem itemGramatica = new JMenuItem("Gramática do Dialeto (Anexo I)");
         itemGramatica.addActionListener(e -> exibirDialogoGramatica());
@@ -242,19 +247,16 @@ public class IDEPascalite extends JFrame {
         tb.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(55, 55, 55)));
 
         JButton btnNovo = new JButton("Novo");
-        btnNovo.setToolTipText("Criar novo arquivo");
         btnNovo.addActionListener(e -> novoArquivo());
 
         JButton btnAbrir = new JButton("Abrir");
-        btnAbrir.setToolTipText("Abrir arquivo de código fonte (.pas)");
         btnAbrir.addActionListener(e -> abrirArquivo());
 
         JButton btnSalvar = new JButton("Salvar");
-        btnSalvar.setToolTipText("Salvar arquivo atual");
         btnSalvar.addActionListener(e -> salvarArquivo(false));
 
-        JButton btnCompilar = new JButton("▶ Analisar Léxico (F5)");
-        btnCompilar.setToolTipText("Executa a análise léxica completa e atualiza as tabelas");
+        JButton btnCompilar = new JButton("▶ Compilar (F5)");
+        btnCompilar.setToolTipText("Executa a análise léxica e sintática");
         btnCompilar.setBackground(new Color(40, 120, 60));
         btnCompilar.setForeground(Color.WHITE);
         btnCompilar.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -272,7 +274,7 @@ public class IDEPascalite extends JFrame {
         tb.addSeparator();
         tb.add(btnLimpar);
         tb.add(Box.createHorizontalStrut(20));
-        tb.add(new JLabel("Carregar Exemplo: "));
+        tb.add(new JLabel("Exemplo: "));
         tb.add(seletorExemplos);
         tb.add(Box.createHorizontalGlue());
 
@@ -282,63 +284,95 @@ public class IDEPascalite extends JFrame {
     public void executarAnaliseLexica() {
         String codigo = painelEditor.getText();
         TabelaSimbolos tabSimbolos = new TabelaSimbolos();
-        AnalisadorLexico analisador = new AnalisadorLexico(codigo, tabSimbolos);
+        AnalisadorLexico lexico = new AnalisadorLexico(codigo, tabSimbolos);
 
         long inicioTempo = System.currentTimeMillis();
-        List<Token> tokens = analisador.analisar();
+        List<Token> tokens = lexico.analisar();
+        List<ErroLexico> errosLexicos = lexico.getErros();
+
+        AnalisadorSintatico sintatico = new AnalisadorSintatico(tokens);
+        List<ErroSintatico> errosSintaticos = sintatico.analisar();
         long tempoDecorrido = System.currentTimeMillis() - inicioTempo;
 
-        List<ErroLexico> erros = analisador.getErros();
-
-        // Atualiza modelos
         modeloTabelaTokens.definirTokens(tokens);
         modeloTabelaSimbolos.atualizar(tabSimbolos);
-        modeloTabelaErros.definirErros(erros);
+        modeloTabelaErros.definirErros(errosLexicos);
+        modeloTabelaSintatico.definirErros(errosSintaticos);
 
-        // Atualiza abas com contagens
-        abasInferiores.setTitleAt(0, "Erros Léxicos (" + erros.size() + ")");
-        abasInferiores.setTitleAt(1, "Fluxo de Tokens (" + tokens.size() + ")");
+        abasInferiores.setTitleAt(0, "Erros Léxicos (" + errosLexicos.size() + ")");
+        abasInferiores.setTitleAt(1, "Erros Sintáticos (" + errosSintaticos.size() + ")");
+        abasInferiores.setTitleAt(2, "Fluxo de Tokens (" + tokens.size() + ")");
 
-        // Log no console
         StringBuilder log = new StringBuilder();
-        log.append("============================================================\n");
-        log.append("  ANÁLISE LÉXICA - DIALETO PASCALITE\n");
-        log.append("============================================================\n");
-        log.append(String.format("Tempo de execução: %d ms\n", tempoDecorrido));
-        log.append(String.format("Total de caracteres analisados: %d\n", codigo.length()));
-        log.append(String.format("Total de tokens gerados: %d\n", tokens.size()));
-        log.append(String.format("Total de erros léxicos: %d\n", erros.size()));
-        log.append(String.format("Total de símbolos na tabela: %d\n", tabSimbolos.obterTodosSimbolos().size()));
+        log.append("ANÁLISE LÉXICA E SINTÁTICA - PASCALITE\n");
+        log.append("------------------------------------------------------------\n");
+        log.append(String.format("Tempo de execução: %d ms | Tokens: %d | Símbolos: %d\n",
+                tempoDecorrido, tokens.size(), tabSimbolos.obterTodosSimbolos().size()));
+        log.append(String.format("Erros léxicos: %d | Ocorrências sintáticas: %d\n",
+                errosLexicos.size(), errosSintaticos.size()));
         log.append("------------------------------------------------------------\n");
 
-        if (erros.isEmpty()) {
-            log.append("✔ Sucesso! Nenhum erro léxico encontrado.\n");
-            rotuloStatus.setText(String.format("Análise concluída com sucesso! %d tokens gerados (0 erros).", tokens.size()));
-            rotuloStatus.setForeground(new Color(100, 220, 100));
-            abasInferiores.setSelectedIndex(1); // Foca nos tokens
-        } else {
-            log.append("⚠ ATENÇÃO: Foram encontrados erros léxicos no código fonte:\n\n");
-            for (ErroLexico err : erros) {
-                log.append(String.format("  • [Linha %d, Coluna %d] %s (Trecho: '%s')\n    Estratégia de Recuperação: %s\n\n",
-                        err.getLinha(), err.getColuna(), err.getMensagem(), err.getLexemaInvalido(), err.getEstrategiaRecuperacao()));
+        if (errosLexicos.isEmpty() && !sintatico.possuiErros()) {
+            log.append("Compilação concluída sem erros.\n");
+            for (ErroSintatico aviso : errosSintaticos) {
+                log.append(String.format("  [Aviso - Linha %d, Col %d] %s\n",
+                        aviso.getLinha(), aviso.getColuna(), aviso.getMensagem()));
             }
-            rotuloStatus.setText(String.format("Atenção: %d erro(s) léxico(s) encontrado(s)!", erros.size()));
+            rotuloStatus.setText("Análise concluída sem erros.");
+            rotuloStatus.setForeground(new Color(100, 220, 100));
+            if (!errosSintaticos.isEmpty()) {
+                abasInferiores.setSelectedIndex(1);
+            } else {
+                abasInferiores.setSelectedIndex(2);
+            }
+        } else {
+            if (!errosLexicos.isEmpty()) {
+                log.append("\nErros Léxicos:\n");
+                for (ErroLexico err : errosLexicos) {
+                    log.append(String.format("  [Linha %d, Coluna %d] %s ('%s')\n",
+                            err.getLinha(), err.getColuna(), err.getMensagem(), err.getLexemaInvalido()));
+                }
+            }
+            if (!errosSintaticos.isEmpty()) {
+                log.append("\nAnálise Sintática:\n");
+                for (ErroSintatico err : errosSintaticos) {
+                    String prefixo = err.ehAviso() ? "Aviso" : "Erro";
+                    log.append(String.format("  [%s - Linha %d, Coluna %d] %s (próximo a '%s')\n",
+                            prefixo, err.getLinha(), err.getColuna(), err.getMensagem(), err.getLexema()));
+                }
+            }
+
+            rotuloStatus.setText(String.format("Foram encontrados %d erro(s) léxico(s) e %d ocorrência(s) sintática(s).",
+                    errosLexicos.size(), errosSintaticos.size()));
             rotuloStatus.setForeground(new Color(245, 100, 100));
-            abasInferiores.setSelectedIndex(0); // Foca nos erros
+
+            if (!errosLexicos.isEmpty()) {
+                abasInferiores.setSelectedIndex(0);
+            } else {
+                abasInferiores.setSelectedIndex(1);
+            }
         }
 
         areaConsole.setText(log.toString());
         painelEditor.executarAnalise();
     }
 
-    private void aoFinalizarAnalise(List<Token> tokens, List<ErroLexico> erros) {
-        abasInferiores.setTitleAt(0, "Erros Léxicos (" + erros.size() + ")");
-        if (!erros.isEmpty()) {
-            rotuloStatus.setText(String.format("Aviso: %d erro(s) léxico(s) detectado(s) em tempo real!", erros.size()));
+    private void aoFinalizarAnalise(List<Token> tokens, List<ErroLexico> errosLexicos, List<ErroSintatico> errosSintaticos) {
+        abasInferiores.setTitleAt(0, "Erros Léxicos (" + errosLexicos.size() + ")");
+        abasInferiores.setTitleAt(1, "Erros Sintáticos (" + errosSintaticos.size() + ")");
+        modeloTabelaErros.definirErros(errosLexicos);
+        modeloTabelaSintatico.definirErros(errosSintaticos);
+
+        long qtdErrosSintaticos = errosSintaticos.stream().filter(e -> !e.ehAviso()).count();
+        if (!errosLexicos.isEmpty() || qtdErrosSintaticos > 0) {
+            rotuloStatus.setText(String.format("Erros detectados: %d léxico(s), %d sintático(s)",
+                    errosLexicos.size(), qtdErrosSintaticos));
             rotuloStatus.setForeground(new Color(245, 100, 100));
-            modeloTabelaErros.definirErros(erros);
+        } else if (!errosSintaticos.isEmpty()) {
+            rotuloStatus.setText("Código válido com avisos sintáticos.");
+            rotuloStatus.setForeground(new Color(240, 190, 80));
         } else {
-            rotuloStatus.setText("Código limpo: nenhum erro léxico.");
+            rotuloStatus.setText("Código válido: nenhum erro léxico ou sintático.");
             rotuloStatus.setForeground(new Color(150, 220, 150));
         }
     }
@@ -355,13 +389,8 @@ public class IDEPascalite extends JFrame {
 
     private void carregarExemploValido() {
         String codigo = """
-                // ==========================================
-                // Exemplo 1: Programa Válido do Dialeto PascaLite
-                // Conforme a gramática do Anexo I
-                // ==========================================
                 PROGRAM ExemploValido;
                 
-                { Declarações de Variáveis e Constantes }
                 VAR
                    contador, limite : INTEGER;
                    media : REAL;
@@ -373,7 +402,6 @@ public class IDEPascalite extends JFrame {
                    PI = 3.14159;
                    TITULO = 'Compilador PascaLite';
                 
-                { Procedimento de Teste }
                 PROCEDURE ImprimeResult(valor : INTEGER);
                 VAR
                    status : STRING;
@@ -397,7 +425,6 @@ public class IDEPascalite extends JFrame {
                       contador := contador - 1;
                    UNTIL contador = 0;
                 
-                   (* Chamada de procedimento e fim do programa *)
                    ImprimeResult(limite);
                 END.
                 """;
@@ -408,30 +435,23 @@ public class IDEPascalite extends JFrame {
 
     private void carregarExemploErros() {
         String codigo = """
-                // ==========================================
-                // Exemplo 2: Demonstração de Detecção e
-                // Recuperação de Erros Léxicos (Modo Pânico)
-                // ==========================================
                 PROGRAM TesteErros;
                 VAR
                    nomeValido : STRING;
-                   // ERRO 1: Identificador excede o limite máximo de 15 caracteres
                    esteIdentificadorTemMaisDeQuinzeCaracteres : INTEGER;
-                   // ERRO 2: Caracteres especiais proibidos ($ e #)
                    salario$Base : REAL;
-                   valor#Total : REAL;
-                   // ERRO 3: Identificador inválido iniciando por dígitos
-                   99nomes : STRING;
-                   // ERRO 4: Número real malformado (ponto sem dígitos)
                    taxa : REAL;
                 BEGIN
                    taxa := 42.abc;
-                   salario$Base := 1500.50;
                    
-                   // ERRO 5: Literal de texto não fechado antes do fim da linha
+                   // Aviso sintático: instrução apenas com identificador
+                   nomeValido;
+                   
+                   // Erro sintático: falta o THEN no IF
+                   IF taxa > 10
+                      taxa := 0;
+                      
                    nomeValido := 'Texto sem aspas no final;
-                   
-                   esteIdentificadorTemMaisDeQuinzeCaracteres := 10;
                 END.
                 """;
         painelEditor.setText(codigo);
@@ -442,7 +462,6 @@ public class IDEPascalite extends JFrame {
     private void carregarExemploFatorial() {
         String codigo = """
                 PROGRAM CalculoFatorial;
-                { Algoritmo clássico de Fatorial }
                 VAR
                    numero, resultado, i : INTEGER;
                 
@@ -460,7 +479,6 @@ public class IDEPascalite extends JFrame {
                    numero := 5;
                    resultado := 1;
                    
-                   // Usando laço FOR (extensão sugerida nas observações)
                    FOR i := 1 TO numero DO
                       resultado := resultado * i;
                 END.
@@ -472,9 +490,6 @@ public class IDEPascalite extends JFrame {
 
     private void carregarExemploBonus() {
         String codigo = """
-                // =================================================
-                // Exemplo 4: Ponto Extra - Registros e Enumerações
-                // =================================================
                 PROGRAM ExemploBonus;
                 
                 TYPE
@@ -544,10 +559,12 @@ public class IDEPascalite extends JFrame {
     private void limparSaidas() {
         modeloTabelaTokens.definirTokens(null);
         modeloTabelaErros.definirErros(null);
+        modeloTabelaSintatico.definirErros(null);
         modeloTabelaSimbolos.atualizar(new TabelaSimbolos());
         areaConsole.setText("");
         abasInferiores.setTitleAt(0, "Erros Léxicos (0)");
-        abasInferiores.setTitleAt(1, "Fluxo de Tokens (0)");
+        abasInferiores.setTitleAt(1, "Erros Sintáticos (0)");
+        abasInferiores.setTitleAt(2, "Fluxo de Tokens (0)");
         rotuloStatus.setText("Pronto.");
     }
 
@@ -571,9 +588,10 @@ public class IDEPascalite extends JFrame {
                             FUNCTION ID(parametros) : tipo; declaracaoVariavel bloco
                 parametros → declVarList | ε
                 instrucoes → inst instrucoes | ε
-                inst → ID := expr ; | ID [expr] := expr ; | ID (parametros2) ; |
+                inst → ID := expr ; | ID [expr] := expr ; | ID (parametros2) ; | ID ; |
                        IF expr THEN inst | IF expr THEN inst ELSE inst |
                        WHILE expr DO inst | REPEAT inst UNTIL expr ; |
+                       FOR ID := expr TO/DOWNTO expr DO inst |
                        BREAK ; | CONTINUE ; | bloco
                 expr → exprComparacao expr2
                 expr2 → OU exprComparacao expr2 | E exprComparacao expr2 | ε
@@ -588,37 +606,21 @@ public class IDEPascalite extends JFrame {
                 unario → + fator | - fator | fator
                 fator → (expr) | variavel | NUM | LITERAL
                 variavel → ID | ID[exprOp]
-                NUM → digitos | digitos.digitos
-                digitos → dig digitos*
-                dig → [0-9]
-                ID → [A-Za-z][letra | dig | _]* (máximo 15 caracteres)
-                LITERAL → '[letra | dig | CARACTER_ESPECIAL]*'
                 """;
         JTextArea ta = new JTextArea(msg);
         ta.setFont(new Font("Consolas", Font.PLAIN, 12));
         ta.setEditable(false);
         JScrollPane sp = new JScrollPane(ta);
         sp.setPreferredSize(new Dimension(650, 480));
-        JOptionPane.showMessageDialog(this, sp, "Gramática Formal do Dialeto PascaLite", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, sp, "Gramática do Dialeto PascaLite", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void exibirDialogoSobre() {
         String msg = """
-                PascaLite IDE & Compilador v1.0
+                PascaLite IDE & Compilador
                 Trabalho da Disciplina de Compiladores
-                Ciência da Computação - Universidade Federal do Espírito Santo (UFES)
+                Ciência da Computação - UFES
                 Professor: Rodrigo Freitas Silva
-                
-                Recursos Implementados:
-                ✔ Analisador Léxico baseado em Autômato Finito Determinístico (AFD)
-                ✔ Insensibilidade a maiúsculas/minúsculas (Case-insensitive)
-                ✔ Identificadores com limite de 15 caracteres
-                ✔ Remoção e tratamento de comentários (//, {}, (* *)) e espaços
-                ✔ Sublinhado ondulado vermelho no código fonte e detecção em tempo real
-                ✔ Tabela de Símbolos completa com pré-definidos e identificadores
-                ✔ Recuperação de Erros via Modo Pânico com sincronização
-                ✔ Visualizador interativo do AFD (Grafo 2D + Tabela de Transições)
-                ✔ Extensões: Suporte a estruturas de controle FOR e tipos RECORD/ENUM
                 """;
         JOptionPane.showMessageDialog(this, msg, "Sobre o PascaLite", JOptionPane.INFORMATION_MESSAGE);
     }

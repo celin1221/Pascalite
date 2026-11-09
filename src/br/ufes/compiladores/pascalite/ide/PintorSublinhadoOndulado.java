@@ -5,10 +5,6 @@ import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
 
-/**
- * Desenha uma linha ondulada vermelha sob o trecho de código com erro léxico,
- * idêntico ao comportamento de IDEs profissionais (VS Code, IntelliJ).
- */
 public class PintorSublinhadoOndulado extends DefaultHighlighter.DefaultHighlightPainter {
     private final Color corOnda;
 

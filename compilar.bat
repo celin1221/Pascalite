@@ -5,7 +5,7 @@ echo ========================================================
 
 if not exist bin mkdir bin
 
-javac -encoding UTF-8 -d bin src\br\ufes\compiladores\pascalite\lexico\*.java src\br\ufes\compiladores\pascalite\lexico\afd\*.java src\br\ufes\compiladores\pascalite\ide\modelos\*.java src\br\ufes\compiladores\pascalite\ide\*.java src\br\ufes\compiladores\pascalite\Principal.java
+javac -encoding UTF-8 -d bin src\br\ufes\compiladores\pascalite\lexico\*.java src\br\ufes\compiladores\pascalite\sintatico\*.java src\br\ufes\compiladores\pascalite\ide\modelos\*.java src\br\ufes\compiladores\pascalite\ide\*.java src\br\ufes\compiladores\pascalite\Principal.java
 
 if errorlevel 1 (
     echo Erro durante a compilacao!
